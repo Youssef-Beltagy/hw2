@@ -2,6 +2,12 @@
 
 ## 1. System Design
 
+**Core user actions (identified from the scenario):**
+
+1. **Set up a pet and owner profile** — The user enters basic information about themselves (name, available time) and their pet (name, species/breed). This establishes the context and constraints for scheduling.
+2. **Add and edit care tasks** — The user creates pet care tasks (e.g., walks, feeding, medication, grooming, enrichment) specifying at least a duration and priority for each. They can also edit existing tasks as needs change.
+3. **Generate a daily care plan** — The system produces a scheduled plan for the day, ordering tasks by priority and fitting them within the owner's available time. The plan is displayed clearly and includes an explanation of why tasks were ordered or included/excluded.
+
 **a. Initial design**
 
 - Briefly describe your initial UML design.

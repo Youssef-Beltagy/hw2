@@ -1,24 +1,63 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 
 
 @dataclass
 class Task:
+    """A pet care task with priority, duration, and optional recurrence."""
     name: str
     category: str
-    duration_minutes: int
-    priority: int  # 1=high, 2=medium, 3=low
-    pet: Pet | None = None
-    start_minute: int = -1
-    completed: bool = False
+    priority: int  # lower is higher
+    duration: timedelta
+    description: str = ""
+    due_date: datetime | None = None
 
+    completed: bool = False
+    required: bool = True # resetable tasks can't be required. So required and reset_every are mutually exclusive
+    reset_every: timedelta | None = None
+    next_reset_time: datetime | None = None
+
+    pet: Pet | None = None
+
+    # Set by the scheduler
+    start_time: datetime | None = None
+
+
+    def __post_init__(self) -> None:
+        """Validate that reset_every and required are mutually exclusive, and due_date is day-granularity."""
+        if self.reset_every and self.required:
+            raise ValueError(f"Task '{self.name}': reset_every and required are mutually exclusive.")
+        
+        if self.due_date is None:
+            return
+        
+        if self.due_date.hour != 0 or self.due_date.minute != 0 or self.due_date.second != 0 or self.due_date.microsecond != 0:
+            raise ValueError(f"Task '{self.name}': due dates should be at the days granularity.")
+
+        
     def mark_complete(self) -> None:
         """Mark this task as completed."""
         self.completed = True
+        if self.reset_every:
+            self.next_reset_time = datetime.now() + self.reset_every
+
+    def reset(self) -> None:
+        """Reset task completion and advance next_reset_time if recurring and enough time passed. Else, do nothing"""
+        if not self.next_reset_time:
+            return
+        
+        if datetime.now() < self.next_reset_time:
+            return
+
+        self.completed = False
+        self.start_time = None
+        self.next_reset_time = None
 
 
 @dataclass
 class Pet:
+    """A pet with identifying info and a collection of care tasks."""
     name: str
     species: str
     tasks: dict[str, Task] = field(default_factory=dict)
@@ -35,17 +74,31 @@ class Pet:
             task.pet = None
         return task
 
+    def list_tasks(self) -> list[Task]:
+        """Return all tasks for this pet."""
+        return list(self.tasks.values())
+
+
+@dataclass
+class Availability:
+    """A time block when the owner is available for pet care."""
+    start_time: datetime
+    duration: timedelta
+
 
 @dataclass
 class Owner:
+    """A pet owner with available time, pets, and availability blocks."""
     name: str
-    available_minutes: int
     pets: dict[str, Pet] = field(default_factory=dict)
+    availabilities: list[Availability] = field(default_factory=list)
 
     def add_pet(self, pet: Pet) -> None:
         """Add or update a pet by name, preserving existing tasks."""
         if pet.name in self.pets:
             existing = self.pets[pet.name]
+
+            # Update Sepcies and tasks
             existing.species = pet.species
             # merge new tasks into existing, keeping old ones
             # a bit unnecessary since "new" pet entries will not have tasks.
@@ -59,9 +112,62 @@ class Owner:
         """Return a flat list of all tasks across all pets."""
         return [t for p in self.pets.values() for t in p.tasks.values()]
 
+    def list_pets(self) -> list[Pet]:
+        """Return all pets for this owner."""
+        return list(self.pets.values())
+
+    def remove_pet(self, pet_name: str) -> Pet | None:
+        """Remove and return a pet by name, or None if not found."""
+        return self.pets.pop(pet_name, None)
+
+    def add_availability(self, availability: Availability) -> None:
+        """Add an availability block, raising ValueError if it overlaps an existing one."""
+
+        if availability.start_time < datetime.now() - timedelta(minutes=1):
+            raise ValueError(f"Availability start time is in the past")
+        
+        new_end = availability.start_time + availability.duration
+        for i, existing in enumerate(self.availabilities):
+            ex_end = existing.start_time + existing.duration
+
+            if availability.start_time > ex_end:
+                continue
+
+            if new_end < existing.start_time:
+                self.availabilities.insert(i, availability)
+                return
+            
+            # Overlapping intervals
+            # Merge the times
+            start_time = min(existing.start_time, availability.start_time)
+            end_time = max(ex_end, new_end)
+
+            self.availabilities[i].start_time = start_time
+            self.availabilities[i].duration = end_time - start_time
+            return
+            
+        self.availabilities.append(availability)
+
+    def trim_availabilities(self):
+        """Remove or adjust availability blocks that are in the past."""
+        while(len(self.availabilities) > 0 and self.availabilities[0].start_time < datetime.now()):
+            now_1 = datetime.now() + timedelta(minutes=2, seconds=1) # Make sure there is at least one minute
+            cur_avail = self.availabilities[0]
+            if (cur_avail.start_time + cur_avail.duration) < now_1:
+                self.remove_availability(0)
+            else:
+                cur_avail.duration = cur_avail.duration - timedelta(minutes=(datetime.now() - cur_avail.start_time).seconds/60 + 1)
+                cur_avail.start_time = now_1
+
+
+    def remove_availability(self, index: int) -> Availability:
+        """Remove and return an availability block by index."""
+        return self.availabilities.pop(index)
+
 
 @dataclass
 class Plan:
+    """The result of scheduling: scheduled tasks with explanations and skipped task reasons."""
     scheduled_tasks: list[Task]
     scheduled_explanations: list[str]
     skipped_explanations: list[str]
@@ -78,60 +184,115 @@ class Plan:
         return "\n".join(lines)
 
 
+def fmt_dt(dt: datetime | None) -> str:
+    """Format a datetime to minute precision, or 'None'."""
+    return dt.strftime("%Y-%m-%d %H:%M") if dt else "None"
+
+def fmt_td(td: timedelta) -> str:
+    """Format a timedelta to hours and minutes."""
+    total_min = int(td.total_seconds() // 60)
+    h, m = divmod(total_min, 60)
+    return f"{h}h{m:02d}m" if h else f"{m}m"
+
+
 class Scheduler:
+    """Manages owners and generates prioritized daily care plans across all pets."""
+
     def __init__(self):
         self.owners: dict[str, Owner] = {}
 
     def add_owner(self, owner: Owner) -> None:
         """Add or update an owner by name, preserving existing pets and tasks."""
         if owner.name in self.owners:
-            existing = self.owners[owner.name]
-            existing.available_minutes = owner.available_minutes
-
-            # merge new pets into existing, keeping old ones
-            # a bit unnecessary since "new" owner entries will not have pets.
-            # but keeping it just in case I need it later.
-            for name, pet in owner.pets.items():
-                existing.add_pet(pet)
+            # Owner already exists, do nothing
+            return
         else:
             self.owners[owner.name] = owner
+
+    def remove_owner(self, owner_name: str) -> Owner | None:
+        """Remove and return an owner by name, or None if not found."""
+        return self.owners.pop(owner_name, None)
+
+    def get_all_tasks(self, owner: Owner) -> list[Task]:
+        """Retrieve all tasks across all pets for a given owner, sorted by priority."""
+        return sorted(owner.all_tasks(), key=lambda t: t.priority)
+    
+    def get_sorted_tasks(self, owner: Owner) -> list[Task]:
+        """Return tasks sorted by urgency: required tasks due soon first (by due date, then priority), then remaining tasks by priority. Resets recurring tasks before sorting."""
+
+
+        # Computationally inefficient, but who cares?
+        tasks: list[Task] = owner.all_tasks()
+        
+        # Reset recurring tasks
+        for t in tasks:
+            t.reset()
+
+        tasks = [t for t in tasks if not t.completed]
+
+        tomorrow = datetime.now() + timedelta(days=1)
+
+        # For tasks that are due today or tomorrow, prioritize the due date then the priority
+        tasks_required_soon = sorted(filter(lambda t: t.required and t.due_date and t.due_date <= tomorrow, tasks), key=lambda t: (t.due_date, t.priority))
+
+        # For other tasks, order by priority
+        other_tasks = filter(lambda t: t not in tasks_required_soon, tasks)
+        other_tasks = sorted(other_tasks, key=lambda t: (t.priority))
+
+        # Merge the two lists
+        return tasks_required_soon + other_tasks
+
+
 
     def generate_plan(self, owner: Owner) -> Plan:
         """Generate a prioritized schedule for the owner and return a Plan with explanations."""
         scheduled_tasks: list[Task] = []
-        scheduled_explanations = [f"Plan for {owner.name} ({owner.available_minutes} min available):\n"]
-        skipped_explanations = [f"Skipped tasks for {owner.name}:\n"]
+        scheduled_explanations = [f"Plan for {owner.name}:\n"]
+        skipped_explanations: dict[str, str] = dict([["header", f"Skipped tasks for {owner.name}:\n"]])
 
-        tasks = sorted(filter(lambda t: not t.completed, owner.all_tasks()), key=lambda t: t.priority)
-        task_index = 0
-        elapsed_min = 0
-        while elapsed_min <= owner.available_minutes and task_index < len(tasks):
-            task = tasks[task_index]
-            pet_name = task.pet.name if task.pet else "Unknown"
-            remaining_minutes = owner.available_minutes - elapsed_min
-            if task.duration_minutes <= remaining_minutes:
-                task.start_minute = elapsed_min
-                scheduled_tasks.append(task)
-                scheduled_explanations.append(
-                    f"  [{pet_name}] {task.name} (priority {task.priority}, "
-                    f"{task.duration_minutes} min) — {elapsed_min} to {elapsed_min + task.duration_minutes} min"
-                )
-                elapsed_min += task.duration_minutes
-            else:
-                skipped_explanations.append(
-                    f"  [{pet_name}] {task.name} skipped but would fit if shorter or higher priority "
-                    f"({task.duration_minutes} min task duration > {remaining_minutes} min left):"
-                )
-            task_index += 1
+        all_tasks = self.get_sorted_tasks(owner)
 
-        for task in tasks[task_index:]:
+        # Get rid of old time
+        owner.trim_availabilities()
+
+        for availability in owner.availabilities:
+
+            cur_tasks = [t for t in all_tasks if t not in scheduled_tasks]
+
+            task_index = 0
+            elapsed = timedelta()
+            available_time = availability.duration
+            while elapsed + timedelta(seconds=30) <= available_time and task_index < len(cur_tasks):
+                task = cur_tasks[task_index]
+                pet_name = task.pet.name if task.pet else "Unknown"
+                remaining = available_time - elapsed
+                if task.duration <= remaining:
+                    task.start_time = availability.start_time + elapsed
+                    scheduled_tasks.append(task)
+                    scheduled_explanations.append(
+                        f"  [{pet_name}] {task.name} scheduled at {fmt_dt(task.start_time)} --> {fmt_dt(task.start_time + task.duration)} (priority: {task.priority}, due_date: {fmt_dt(task.due_date)}, duration: {fmt_td(task.duration)})"
+                    )
+                    elapsed += task.duration
+                    
+                    if f"{pet_name}-{task.name}" in skipped_explanations:
+                        del skipped_explanations[f"{pet_name}-{task.name}"]
+                    
+                else:
+                    skipped_explanations[f"{pet_name}-{task.name}"] = f"  [{pet_name}] {task.name} skipped but would fit if shorter or higher priority ({fmt_td(task.duration)} task duration > {fmt_td(remaining)} left):"
+                task_index += 1
+
+        for task in all_tasks:
+            if task in scheduled_tasks:
+                continue
+            
             pet_name = task.pet.name if task.pet else "Unknown"
-            skipped_explanations.append(
-                f"  [{pet_name}] {task.name} skipped because owner ran out of time but could fit if higher priority"
-            )
+
+            if f"{pet_name}-{task.name}" in skipped_explanations:
+                continue
+            skipped_explanations[f"{pet_name}-{task.name}"] = f"  [{pet_name}] {task.name} skipped because owner ran out of time"
 
         return Plan(
-            scheduled_tasks=scheduled_tasks,
+            scheduled_tasks=sorted(scheduled_tasks, key=lambda t: t.start_time), # The schedule should be returned sorted
             scheduled_explanations=scheduled_explanations,
-            skipped_explanations=skipped_explanations,
+            skipped_explanations=list(skipped_explanations.values()),
         )

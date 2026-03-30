@@ -1,10 +1,21 @@
+from __future__ import annotations
 from dataclasses import dataclass, field
+
+
+@dataclass
+class Task:
+    name: str
+    category: str
+    duration_minutes: int
+    priority: int  # 1=high, 2=medium, 3=low
+    pet: Pet | None = None
 
 
 @dataclass
 class Pet:
     name: str
     species: str
+    tasks: list[Task] = field(default_factory=list)
 
 
 @dataclass
@@ -15,23 +26,16 @@ class Owner:
 
 
 @dataclass
-class Task:
-    name: str
-    category: str
-    duration_minutes: int
-    priority: int  # 1=high, 2=medium, 3=low
-
-
-@dataclass
 class ScheduleEntry:
     task: Task
     start_minute: int
 
 
 class Scheduler:
-    def __init__(self, owner: Owner, tasks: list[Task]):
+    def __init__(self, owner: Owner):
         self.owner = owner
-        self.tasks = tasks
+        self.scheduled: list[ScheduleEntry] = []
+        self.skipped: list[Task] = []
 
     def generate_plan(self) -> list[ScheduleEntry]:
         """Return scheduled entries sorted by priority, fitting within available time."""

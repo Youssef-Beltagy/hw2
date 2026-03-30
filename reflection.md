@@ -10,13 +10,21 @@
 
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+The UML diagram includes five classes:
+
+- **Owner** — Holds the owner's name and available minutes per day. Represents the human constraint on scheduling (how much time they can dedicate to pet care). An owner has one or more pets.
+- **Pet** — Holds the pet's name and species. Each pet has its own list of care tasks. This lets the system distinguish tasks per pet if the owner has multiple animals.
+- **Task** — Represents a single care activity (e.g., walk, feeding, medication). Holds a name, category, duration in minutes, and a priority level (postivie integers with smaller number representing higher priority). This is the core unit the scheduler works with.
+- **ScheduleEntry** — Pairs a Task with a start time (in minutes from the start of the day). This separates "what to do" from "when to do it," keeping Task reusable across different schedules.
+- **Scheduler** — The only class with real logic. Takes an Owner and a list of Tasks, then produces a daily plan. Has two methods: `generate_plan()` sorts tasks by priority and packs them into the available time, and `explain_plan()` produces a human-readable explanation of what was scheduled and what was dropped.
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+Two changes were made after reviewing the initial design:
+
+1. **Owner → Pet changed from one-to-one to one-to-many.** The user pointed out that an owner may have multiple pets. The `Owner.pet` attribute was replaced with `Owner.pets: list[Pet]`, and the UML relationship was updated from `"1" --> "1"` to `"1" --> "*"`. This was a straightforward requirement correction.
+
+2. **Task gained a `pet` reference, and Scheduler gained `scheduled`/`skipped` state.** After AI review of the code, two issues were identified: (a) Task had no link back to Pet, so with multiple pets the scheduler couldn't tell which pet a task belonged to — fixed by adding `pet: Pet` to Task; (b) `explain_plan()` had no access to the results of `generate_plan()` since they shared no state — fixed by adding `scheduled` and `skipped` lists to Scheduler that `generate_plan()` populates and `explain_plan()` reads.
 
 ---
 

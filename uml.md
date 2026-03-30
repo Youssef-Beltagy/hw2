@@ -11,6 +11,7 @@ classDiagram
     class Pet {
         +str name
         +str species
+        +list~Task~ tasks
     }
 
     class Task {
@@ -27,7 +28,8 @@ classDiagram
 
     class Scheduler {
         +Owner owner
-        +list~Task~ tasks
+        +list~ScheduleEntry~ scheduled
+        +list~Task~ skipped
         +generate_plan() list~ScheduleEntry~
         +explain_plan() str
     }
@@ -35,7 +37,6 @@ classDiagram
     Owner "1" --> "*" Pet : has
     Pet "1" --> "*" Task : has
     Scheduler --> Owner : reads
-    Scheduler --> "*" Task : reads
     Scheduler --> "*" ScheduleEntry : produces
     ScheduleEntry --> Task : wraps
 ```

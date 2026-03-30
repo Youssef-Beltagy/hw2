@@ -34,12 +34,12 @@ if st.button("Register Owner"):
 
 # --- Select Owner ---
 if scheduler.owners:
-    owner_names = [o.name for o in scheduler.owners]
+    owner_names = list(scheduler.owners.keys())
     cur_sel = len(owner_names) - 1
-    if st.session_state.current_owner: 
-        cur_sel = next(i for i, name in enumerate(owner_names) if name == st.session_state.current_owner.name)
+    if st.session_state.current_owner:
+        cur_sel = owner_names.index(st.session_state.current_owner.name)
     selected = st.selectbox("Select owner", owner_names, index=cur_sel)
-    st.session_state.current_owner = next(o for o in scheduler.owners if o.name == selected)
+    st.session_state.current_owner = scheduler.owners[selected]
 
 owner = st.session_state.current_owner
 
@@ -60,14 +60,14 @@ if st.button("Add Pet"):
     else:
         st.warning("Please enter a pet name.")
 
-for pet in owner.pets:
+for pet in owner.pets.values():
     st.write(f"🐾 **{pet.name}** ({pet.species}) — {len(pet.tasks)} task(s)")
 
 # --- Add Tasks ---
 if owner.pets:
     st.divider()
     st.subheader("Add Tasks")
-    pet_names = [p.name for p in owner.pets]
+    pet_names = list(owner.pets.keys())
     selected_pet = st.selectbox("Assign to pet", pet_names)
 
     col1, col2, col3 = st.columns(3)
@@ -82,7 +82,7 @@ if owner.pets:
 
     if st.button("Add Task"):
         if task_title.strip():
-            pet = next(p for p in owner.pets if p.name == selected_pet)
+            pet = owner.pets[selected_pet]
             pet.add_task(Task(name=task_title.strip(), category=category, duration_minutes=int(duration), priority=priority))
             st.success(f"Added '{task_title}' to {selected_pet}!")
         else:

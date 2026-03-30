@@ -16,44 +16,50 @@ class Task:
         """Mark this task as completed."""
         self.completed = True
 
-# @dataclass
-# class TaskTemplate:
-#     task: Task
-#     # repeat every cadence days
-#     cadence: int
-#     nextDate: 
 
 @dataclass
 class Pet:
     name: str
     species: str
-    tasks: list[Task] = field(default_factory=list)
+    tasks: dict[str, Task] = field(default_factory=dict)
 
     def add_task(self, task: Task) -> None:
-        """Add a task to this pet and set its back-reference."""
+        """Add or update a task by name, preserving the pet back-reference."""
         task.pet = self
-        self.tasks.append(task)
+        self.tasks[task.name] = task
 
     def remove_task(self, task_name: str) -> Task | None:
         """Remove and return a task by name, or None if not found."""
-        for i, t in enumerate(self.tasks):
-            if t.name == task_name:
-                return self.tasks.pop(i)
-        return None
+        task = self.tasks.pop(task_name, None)
+        if task:
+            task.pet = None
+        return task
+
 
 @dataclass
 class Owner:
     name: str
     available_minutes: int
-    pets: list[Pet] = field(default_factory=list)
+    pets: dict[str, Pet] = field(default_factory=dict)
 
     def add_pet(self, pet: Pet) -> None:
-        """Add a pet to this owner."""
-        self.pets.append(pet)
+        """Add or update a pet by name, preserving existing tasks."""
+        if pet.name in self.pets:
+            existing = self.pets[pet.name]
+            existing.species = pet.species
+            # merge new tasks into existing, keeping old ones
+            # a bit unnecessary since "new" pet entries will not have tasks.
+            # but keeping it just in case I need it later.
+            for name, task in pet.tasks.items():
+                existing.tasks.setdefault(name, task)
+        else:
+            self.pets[pet.name] = pet
 
     def all_tasks(self) -> list[Task]:
         """Return a flat list of all tasks across all pets."""
-        return [t for p in self.pets for t in p.tasks]
+        return [t for p in self.pets.values() for t in p.tasks.values()]
+
+
 @dataclass
 class Plan:
     scheduled_tasks: list[Task]
@@ -72,19 +78,26 @@ class Plan:
         return "\n".join(lines)
 
 
-
-
 class Scheduler:
     def __init__(self):
-        self.owners = []# Read from json file data store
+        self.owners: dict[str, Owner] = {}
 
-    def add_owner(self, owner):
-        """Add an owner to the scheduler's list."""
-        self.owners.append(owner)
+    def add_owner(self, owner: Owner) -> None:
+        """Add or update an owner by name, preserving existing pets and tasks."""
+        if owner.name in self.owners:
+            existing = self.owners[owner.name]
+            existing.available_minutes = owner.available_minutes
 
-    def generate_plan(self, owner) -> Plan:
+            # merge new pets into existing, keeping old ones
+            # a bit unnecessary since "new" owner entries will not have pets.
+            # but keeping it just in case I need it later.
+            for name, pet in owner.pets.items():
+                existing.add_pet(pet)
+        else:
+            self.owners[owner.name] = owner
+
+    def generate_plan(self, owner: Owner) -> Plan:
         """Generate a prioritized schedule for the owner and return a Plan with explanations."""
-        
         scheduled_tasks: list[Task] = []
         scheduled_explanations = [f"Plan for {owner.name} ({owner.available_minutes} min available):\n"]
         skipped_explanations = [f"Skipped tasks for {owner.name}:\n"]
@@ -105,12 +118,20 @@ class Scheduler:
                 )
                 elapsed_min += task.duration_minutes
             else:
-                skipped_explanations.append(f"[{pet_name}] {task.name} skipped but would fit if shorter or higher priority ({task.duration_minutes} min task duration > {remaining_minutes} min left):")
-
+                skipped_explanations.append(
+                    f"  [{pet_name}] {task.name} skipped but would fit if shorter or higher priority "
+                    f"({task.duration_minutes} min task duration > {remaining_minutes} min left):"
+                )
             task_index += 1
-        
+
         for task in tasks[task_index:]:
             pet_name = task.pet.name if task.pet else "Unknown"
-            skipped_explanations.append(f"  [{pet_name}] {task.name} skipped because owner ran out of time but could fit if higher priority")
-            
-        return Plan(scheduled_tasks=scheduled_tasks, scheduled_explanations=scheduled_explanations, skipped_explanations=skipped_explanations)
+            skipped_explanations.append(
+                f"  [{pet_name}] {task.name} skipped because owner ran out of time but could fit if higher priority"
+            )
+
+        return Plan(
+            scheduled_tasks=scheduled_tasks,
+            scheduled_explanations=scheduled_explanations,
+            skipped_explanations=skipped_explanations,
+        )

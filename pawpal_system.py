@@ -64,7 +64,7 @@ class Plan:
         """Return a formatted string of the scheduled and skipped tasks."""
         lines = self.scheduled_explanations[:]
 
-        if self.skipped_explanations:
+        if len(self.skipped_explanations) > 1:
             lines.append("")
             lines.extend(self.skipped_explanations)
 

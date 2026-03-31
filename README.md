@@ -54,10 +54,12 @@ Beyond the basic requirements, PawPal+ includes several features that make sched
 
 I Implemented the due-date, priority, and multi-availability scheduling using kiro.
 
-1. I built it in steps. First, I had the singe availability scheduling that only used the priority.
+1. I built it in steps. First, I had the single availability scheduling that only used the priority.
 2. Then I added the logic to prioritize tasks that are due today or tomorrow.
 3. Then I added the multi-availability logic.
 4. Then I added the logic to squash overlapping availabilities.
+5. Then I added logic to prioritize urgent tasks.
+6. The scheduling code ensures there are no timing conflicts
 
 Throughout this process, I used kiro-cli to write the boilerplate code. But I had to implement some the algorithms and logic myself because the AI output didn't make sense. Even then, I asked Kiro to review my code and it helped me find some bugs. It also made decent fixes for them.
 

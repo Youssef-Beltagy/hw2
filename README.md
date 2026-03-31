@@ -48,19 +48,20 @@ Beyond the basic requirements, PawPal+ includes several features that make sched
 - **Task validation** — `required` and `reset_every` are enforced as mutually exclusive at creation time. Due dates must be at day granularity.
 - **Availability trimming** — Past availability blocks are automatically removed or shortened before each plan generation, so the schedule always reflects current reality.
 - **Persistence** — Scheduler state (owners, pets, tasks, availabilities) is saved to disk via pickle and restored on app restart.
-- **Next available slot finder** — Given a task duration, `find_next_slot()` scans availability blocks and returns the earliest time that can fit the task, accounting for already-scheduled tasks. Exposed in the UI so owners can quickly answer "when can I next do this?"
 - **48 unit tests** — Full coverage of all classes and methods, including edge cases like overlapping availability merges, completed task filtering, multi-block scheduling, and next-slot lookups.
 
-## Agent Mode Usage
+## Agent Mode Usage for Advanced Scheduling
 
-The "Find Next Available Slot" feature was implemented using Agent Mode (Kiro CLI). The workflow:
+I Implemented the due-date, priority, and multi-availability scheduling using kiro.
 
-1. I described the feature: "Add a third algorithmic capability like next available slot."
-2. The agent added `find_next_slot()` to the `Scheduler` class — it trims past availability, iterates blocks, calculates consumed time from already-scheduled tasks, and returns the earliest start time that fits the requested duration.
-3. The agent wired it into `app.py` with a duration input and "Find slot" button that displays the result.
-4. The agent added 3 tests (slot found, no fit, no availability) and ran the full suite to confirm all 48 tests pass.
+1. I built it in steps. First, I had the singe availability scheduling that only used the priority.
+2. Then I added the logic to prioritize tasks that are due today or tomorrow.
+3. Then I added the multi-availability logic.
+4. Then I added the logic to squash overlapping availabilities.
 
-This was a single-prompt interaction — the agent handled the logic, UI, tests, and README update in one pass.
+Throughout this process, I used kiro-cli to write the boilerplate code. But I had to implement some the algorithms and logic myself because the AI output didn't make sense. Even then, I asked Kiro to review my code and it helped me find some bugs. It also made decent fixes for them.
+
+I then had Kiro write the unit tests and update the streamlit app mostly independently.
 
 ## Testing PawPal+
 

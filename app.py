@@ -210,19 +210,5 @@ if st.session_state.plan:
     render_tasks(st.session_state.plan.scheduled_tasks, "plan")
     st.code(str(st.session_state.plan))
 
-# --- Find Next Slot ---
-st.divider()
-st.subheader("Find Next Available Slot")
-slot_duration = st.number_input("Task duration (min)", min_value=1, max_value=240, value=15, key="slot_dur")
-if st.button("Find slot"):
-    if not owner.availabilities:
-        st.warning("Add at least one availability block first.")
-    else:
-        slot = scheduler.find_next_slot(owner, timedelta(minutes=slot_duration))
-        if slot:
-            st.success(f"Next available slot: {fmt_dt(slot)} → {fmt_dt(slot + timedelta(minutes=slot_duration))}")
-        else:
-            st.warning(f"No availability block can fit a {slot_duration}-minute task.")
-
 # --- Auto-save state ---
 scheduler.save(SAVE_PATH)

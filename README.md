@@ -34,6 +34,15 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+```bash
+# Run streamlit app
+streamlit run app.py
+```
+```bash
+# Run CLI
+python main.py
+```
+
 ## UML Diagram
 
 ![](pics/mermaid-diagram.png)
@@ -48,16 +57,18 @@ Beyond the basic requirements, PawPal+ includes several features that make sched
 - **Task validation** — `required` and `reset_every` are enforced as mutually exclusive at creation time. Due dates must be at day granularity.
 - **Availability trimming** — Past availability blocks are automatically removed or shortened before each plan generation, so the schedule always reflects current reality.
 - **Persistence** — Scheduler state (owners, pets, tasks, availabilities) is saved to disk via pickle and restored on app restart.
-- **48 unit tests** — Full coverage of all classes and methods, including edge cases like overlapping availability merges, completed task filtering, multi-block scheduling, and next-slot lookups.
+- **45 unit tests** — Coverage of all classes and most methods, including edge cases like overlapping availability merges, completed task filtering, multi-block scheduling, and next-slot lookups.
 
 ## Agent Mode Usage for Advanced Scheduling
 
 I Implemented the due-date, priority, and multi-availability scheduling using kiro.
 
-1. I built it in steps. First, I had the singe availability scheduling that only used the priority.
+1. I built it in steps. First, I had the single availability scheduling that only used the priority.
 2. Then I added the logic to prioritize tasks that are due today or tomorrow.
 3. Then I added the multi-availability logic.
 4. Then I added the logic to squash overlapping availabilities.
+5. Then I added logic to prioritize urgent tasks.
+6. The scheduling code ensures there are no timing conflicts
 
 Throughout this process, I used kiro-cli to write the boilerplate code. But I had to implement some the algorithms and logic myself because the AI output didn't make sense. Even then, I asked Kiro to review my code and it helped me find some bugs. It also made decent fixes for them.
 
@@ -72,7 +83,7 @@ source .venv/bin/activate
 python -m pytest tests/ -v
 ```
 
-The 48 tests cover:
+The 45 tests cover:
 
 - **Task** — completion, recurring reset logic, validation (mutually exclusive fields, due date granularity)
 - **Pet** — add/remove/list tasks, overwrite behavior, pet back-references

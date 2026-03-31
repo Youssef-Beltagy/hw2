@@ -98,7 +98,7 @@ class Owner:
         if pet.name in self.pets:
             existing = self.pets[pet.name]
 
-            # Update Sepcies and tasks
+            # Update Species and tasks
             existing.species = pet.species
             # merge new tasks into existing, keeping old ones
             # a bit unnecessary since "new" pet entries will not have tasks.
@@ -144,20 +144,32 @@ class Owner:
 
             self.availabilities[i].start_time = start_time
             self.availabilities[i].duration = end_time - start_time
+            # Check if the merged block now overlaps with the next block
+            while i + 1 < len(self.availabilities):
+                next_avail = self.availabilities[i + 1]
+                merged_end = self.availabilities[i].start_time + self.availabilities[i].duration
+                if merged_end >= next_avail.start_time:
+                    next_end = next_avail.start_time + next_avail.duration
+                    self.availabilities[i].duration = max(merged_end, next_end) - self.availabilities[i].start_time
+                    self.availabilities.pop(i + 1)
+                else:
+                    break
             return
             
         self.availabilities.append(availability)
 
     def trim_availabilities(self):
         """Remove or adjust availability blocks that are in the past."""
-        while(len(self.availabilities) > 0 and self.availabilities[0].start_time < datetime.now()):
-            now_1 = datetime.now() + timedelta(minutes=2, seconds=1) # Make sure there is at least one minute
+        while len(self.availabilities) > 0 and self.availabilities[0].start_time < datetime.now():
+            now_1 = datetime.now() + timedelta(minutes=1)
             cur_avail = self.availabilities[0]
-            if (cur_avail.start_time + cur_avail.duration) < now_1:
+            end_time = cur_avail.start_time + cur_avail.duration
+            if end_time < now_1 or (end_time - now_1) < timedelta(minutes=1):
                 self.remove_availability(0)
             else:
-                cur_avail.duration = cur_avail.duration - timedelta(minutes=(datetime.now() - cur_avail.start_time).seconds/60 + 1)
+                cur_avail.duration = end_time - now_1
                 cur_avail.start_time = now_1
+                break
 
 
     def remove_availability(self, index: int) -> Availability:
@@ -251,6 +263,10 @@ class Scheduler:
         skipped_explanations: dict[str, str] = dict([["header", f"Skipped tasks for {owner.name}:\n"]])
 
         all_tasks = self.get_sorted_tasks(owner)
+
+        # Clear start_time from previous plans
+        for task in all_tasks:
+            task.start_time = None
 
         # Get rid of old time
         owner.trim_availabilities()

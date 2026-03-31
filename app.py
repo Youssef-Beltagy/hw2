@@ -11,14 +11,22 @@ def render_tasks(tasks: list[Task], key_prefix):
         pri = priority_labels.get(t.priority, f"P{t.priority}")
         status = "✅" if t.completed else "🔲"
         tags = f"{'🔁 recurring' if t.reset_every else ''} {'⭐ required' if t.required else ''}".strip()
-        col1, col2 = st.columns([5, 1])
+        col1, col2, col3 = st.columns([5, 1, 1])
         with col1:
-            st.markdown(
-                f"{status} **{t.name}** &nbsp;·&nbsp; 🐾 {pn} &nbsp;·&nbsp; {pri} &nbsp;·&nbsp; ⏱ {fmt_td(t.duration)}m"
-                + (f" &nbsp;·&nbsp; 📅 {due}" if t.due_date else "")
-                + (f" &nbsp;·&nbsp; {tags}" if tags else "")
-            )
+            line = f"{status} 🐾 {pn} &nbsp;·&nbsp; **{t.name}** &nbsp;·&nbsp; {pri} &nbsp;·&nbsp; ⏱ {fmt_td(t.duration)}"
+            if key_prefix == "plan" and t.start_time:
+                line += f" &nbsp;·&nbsp; 🕐 {fmt_dt(t.start_time)} → {fmt_dt(t.start_time + t.duration)}"
+            if t.due_date:
+                line += f" &nbsp;·&nbsp; 📅 {due}"
+            if tags:
+                line += f" &nbsp;·&nbsp; {tags}"
+            st.markdown(line)
         with col2:
+            if not t.completed and st.button("✔️", key=f"{key_prefix}_done_{pn}_{t.name}"):
+                t.mark_complete()
+                st.session_state.plan = None
+                st.rerun()
+        with col3:
             if st.button("❌", key=f"{key_prefix}_del_task_{pn}_{t.name}"):
                 t.pet.remove_task(t.name)
                 st.session_state.plan = None
@@ -56,7 +64,7 @@ if st.button("Register Owner"):
 if scheduler.owners:
     owner_names = list(scheduler.owners.keys())
     cur_sel = len(owner_names) - 1
-    if st.session_state.current_owner:
+    if st.session_state.current_owner and st.session_state.current_owner.name in owner_names:
         cur_sel = owner_names.index(st.session_state.current_owner.name)
     selected = st.selectbox("Select owner", owner_names, index=cur_sel)
     st.session_state.current_owner = scheduler.owners[selected]
@@ -86,6 +94,7 @@ if st.button("Add Availability"):
     try:
         owner.add_availability(Availability(start_time=avail_start, duration=timedelta(minutes=avail_duration)))
         st.success(f"Added availability at {fmt_dt(avail_start)} for {avail_duration} mins")
+        st.session_state.plan = None
     except ValueError as e:
         st.warning(str(e))
 
@@ -97,6 +106,7 @@ for i, a in enumerate(owner.availabilities):
     with col2:
         if st.button("❌", key=f"del_avail_{i}"):
             owner.remove_availability(i)
+            st.session_state.plan = None
             st.rerun()
 
 # --- Pets ---
@@ -119,6 +129,7 @@ for pname, pet in list(owner.pets.items()):
     with col2:
         if st.button("❌", key=f"del_pet_{pname}"):
             owner.remove_pet(pname)
+            st.session_state.plan = None
             st.rerun()
 
 # --- Tasks ---
@@ -149,7 +160,7 @@ if owner.pets:
         dd = datetime.combine(due_date, time(0, 0)) if due_date else None
         if reset_days > 0 and task_required:
             st.warning("Recurring tasks can't be required")
-        if dd and dd < datetime.combine(datetime.now(), time(0, 0)):
+        elif dd and dd < datetime.combine(datetime.now(), time(0, 0)):
             st.warning("Due Date can't be in the past")
         elif task_title.strip():
             pet = owner.pets[selected_pet]
@@ -164,6 +175,7 @@ if owner.pets:
                 reset_every=reset_every,
             ))
             st.success(f"Added '{task_title}' to {selected_pet}!")
+            st.session_state.plan = None
         else:
             st.warning("Please enter a task name.")
 

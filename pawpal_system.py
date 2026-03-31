@@ -1,4 +1,5 @@
 from __future__ import annotations
+import pickle
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -312,3 +313,14 @@ class Scheduler:
             scheduled_explanations=scheduled_explanations,
             skipped_explanations=list(skipped_explanations.values()),
         )
+
+    def save(self, path: str) -> None:
+        """Save scheduler state to a pickle file."""
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+
+    @staticmethod
+    def load(path: str) -> Scheduler:
+        """Load scheduler state from a pickle file."""
+        with open(path, "rb") as f:
+            return pickle.load(f)

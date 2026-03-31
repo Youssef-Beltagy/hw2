@@ -1,6 +1,9 @@
 import streamlit as st
+import os
 from datetime import datetime, timedelta, time
 from pawpal_system import Owner, Pet, Task, Scheduler, Availability, fmt_dt, fmt_td
+
+SAVE_PATH = "pawpal_state.pkl"
 
 
 def render_tasks(tasks: list[Task], key_prefix):
@@ -37,7 +40,10 @@ st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
 # --- Session State Initialization ---
 if "scheduler" not in st.session_state:
-    st.session_state.scheduler = Scheduler()
+    if os.path.exists(SAVE_PATH):
+        st.session_state.scheduler = Scheduler.load(SAVE_PATH)
+    else:
+        st.session_state.scheduler = Scheduler()
 if "current_owner" not in st.session_state:
     st.session_state.current_owner = None
 if "plan" not in st.session_state:
@@ -79,6 +85,7 @@ owner = st.session_state.current_owner
 
 if not owner:
     st.info("Register an owner to get started.")
+    scheduler.save(SAVE_PATH)
     st.stop()
 
 # --- Availability ---
@@ -162,6 +169,8 @@ if owner.pets:
             st.warning("Recurring tasks can't be required")
         elif dd and dd < datetime.combine(datetime.now(), time(0, 0)):
             st.warning("Due Date can't be in the past")
+        elif dd and reset_days > 0:
+            st.warning("Recurring tasks can't have a due date")
         elif task_title.strip():
             pet = owner.pets[selected_pet]
             pet.add_task(Task(
@@ -200,3 +209,20 @@ if st.button("Generate schedule"):
 if st.session_state.plan:
     render_tasks(st.session_state.plan.scheduled_tasks, "plan")
     st.code(str(st.session_state.plan))
+
+# --- Find Next Slot ---
+st.divider()
+st.subheader("Find Next Available Slot")
+slot_duration = st.number_input("Task duration (min)", min_value=1, max_value=240, value=15, key="slot_dur")
+if st.button("Find slot"):
+    if not owner.availabilities:
+        st.warning("Add at least one availability block first.")
+    else:
+        slot = scheduler.find_next_slot(owner, timedelta(minutes=slot_duration))
+        if slot:
+            st.success(f"Next available slot: {fmt_dt(slot)} → {fmt_dt(slot + timedelta(minutes=slot_duration))}")
+        else:
+            st.warning(f"No availability block can fit a {slot_duration}-minute task.")
+
+# --- Auto-save state ---
+scheduler.save(SAVE_PATH)

@@ -24,6 +24,8 @@ Your final app should:
 
 ## Getting started
 
+![](pics/app.png)
+
 ### Setup
 
 ```bash
@@ -32,12 +34,54 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### Suggested workflow
+## UML Diagram
 
-1. Read the scenario carefully and identify requirements and edge cases.
-2. Draft a UML diagram (classes, attributes, methods, relationships).
-3. Convert UML into Python class stubs (no logic yet).
-4. Implement scheduling logic in small increments.
-5. Add tests to verify key behaviors.
-6. Connect your logic to the Streamlit UI in `app.py`.
-7. Refine UML so it matches what you actually built.
+![](pics/mermaid-diagram.png)
+
+## Smarter Scheduling
+
+Beyond the basic requirements, PawPal+ includes several features that make scheduling more realistic:
+
+- **Multiple availability blocks** — Owners define specific time windows (e.g., 8:00–9:00 and 17:00–18:00) instead of a single "available minutes" number. Overlapping blocks are automatically merged.
+- **Due date urgency** — Required tasks due today or tomorrow are scheduled before everything else, sorted by due date then priority. This prevents urgent tasks from being crowded out.
+- **Recurring tasks** — Non-required tasks can have a `reset_every` interval. After completion, they auto-reset once the interval passes, reappearing in future plans.
+- **Task validation** — `required` and `reset_every` are enforced as mutually exclusive at creation time. Due dates must be at day granularity.
+- **Availability trimming** — Past availability blocks are automatically removed or shortened before each plan generation, so the schedule always reflects current reality.
+- **Persistence** — Scheduler state (owners, pets, tasks, availabilities) is saved to disk via pickle and restored on app restart.
+- **Next available slot finder** — Given a task duration, `find_next_slot()` scans availability blocks and returns the earliest time that can fit the task, accounting for already-scheduled tasks. Exposed in the UI so owners can quickly answer "when can I next do this?"
+- **48 unit tests** — Full coverage of all classes and methods, including edge cases like overlapping availability merges, completed task filtering, multi-block scheduling, and next-slot lookups.
+
+## Agent Mode Usage
+
+The "Find Next Available Slot" feature was implemented using Agent Mode (Kiro CLI). The workflow:
+
+1. I described the feature: "Add a third algorithmic capability like next available slot."
+2. The agent added `find_next_slot()` to the `Scheduler` class — it trims past availability, iterates blocks, calculates consumed time from already-scheduled tasks, and returns the earliest start time that fits the requested duration.
+3. The agent wired it into `app.py` with a duration input and "Find slot" button that displays the result.
+4. The agent added 3 tests (slot found, no fit, no availability) and ran the full suite to confirm all 48 tests pass.
+
+This was a single-prompt interaction — the agent handled the logic, UI, tests, and README update in one pass.
+
+## Testing PawPal+
+
+Run the full test suite:
+
+```bash
+source .venv/bin/activate
+python -m pytest tests/ -v
+```
+
+The 48 tests cover:
+
+- **Task** — completion, recurring reset logic, validation (mutually exclusive fields, due date granularity)
+- **Pet** — add/remove/list tasks, overwrite behavior, pet back-references
+- **Owner** — add/remove pets, availability management (insert, merge overlapping, reject past), task aggregation
+- **Plan** — formatted output with and without skipped tasks
+- **Formatters** — `fmt_dt` and `fmt_td` for datetime/timedelta display
+- **Scheduler** — owner management, task sorting (urgency, priority, completed filtering), plan generation (single/multi-block, skipping, empty cases), next-slot lookups
+
+![](pics/tests.png)
+
+## Extra Credit
+
+I did challenges 1-4. 

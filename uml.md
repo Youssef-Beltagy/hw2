@@ -2,41 +2,76 @@
 
 ```mermaid
 classDiagram
-    class Owner {
+    class Task {
         +str name
-        +int available_minutes
-        +list~Pet~ pets
+        +str category
+        +int priority
+        +timedelta duration
+        +str description
+        +datetime due_date
+        +bool completed
+        +bool required
+        +timedelta reset_every
+        +datetime next_reset_time
+        +Pet pet
+        +datetime start_time
+        +__post_init__()
+        +mark_complete()
+        +reset()
     }
 
     class Pet {
         +str name
         +str species
-        +list~Task~ tasks
+        +dict~str, Task~ tasks
+        +add_task(Task)
+        +remove_task(str) Task
+        +list_tasks() list~Task~
     }
 
-    class Task {
+    class Availability {
+        +datetime start_time
+        +timedelta duration
+    }
+
+    class Owner {
         +str name
-        +str category
-        +int duration_minutes
-        +int priority
+        +dict~str, Pet~ pets
+        +list~Availability~ availabilities
+        +add_pet(Pet)
+        +remove_pet(str) Pet
+        +list_pets() list~Pet~
+        +all_tasks() list~Task~
+        +add_availability(Availability)
+        +remove_availability(int) Availability
+        +trim_availabilities()
     }
 
-    class ScheduleEntry {
-        +Task task
-        +int start_minute
+    class Plan {
+        +list~Task~ scheduled_tasks
+        +list~str~ scheduled_explanations
+        +list~str~ skipped_explanations
+        +__str__() str
     }
 
     class Scheduler {
-        +Owner owner
-        +list~ScheduleEntry~ scheduled
-        +list~Task~ skipped
-        +generate_plan() list~ScheduleEntry~
-        +explain_plan() str
+        +dict~str, Owner~ owners
+        +add_owner(Owner)
+        +remove_owner(str) Owner
+        +get_all_tasks(Owner) list~Task~
+        +get_sorted_tasks(Owner) list~Task~
+        +generate_plan(Owner) Plan
+        +save(str)
+        +load(str) Scheduler
     }
 
     Owner "1" --> "*" Pet : has
+    Owner "1" --> "*" Availability : has
     Pet "1" --> "*" Task : has
-    Scheduler --> Owner : reads
-    Scheduler --> "*" ScheduleEntry : produces
-    ScheduleEntry --> Task : wraps
+    Task "*" --> "1" Pet : belongs to
+    Scheduler "1" --> "*" Owner : manages
+    Scheduler ..> Plan : produces
+    Plan --> "*" Task : schedules
 ```
+
+![](pics/mermaid-diagram.png)
